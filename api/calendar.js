@@ -18,16 +18,18 @@ export default async function handler(req, res) {
       if (titleMatch && startMatch) {
         const title = titleMatch[1].trim();
         const rawDate = startMatch[1].trim();
-        const location = locationMatch ? locationMatch[1].trim() : "";
+        const location = locationMatch ? locationMatch[1].trim() : null;
 
+        // Parse date
         const year = rawDate.slice(0, 4);
         const month = rawDate.slice(4, 6) - 1;
         const day = rawDate.slice(6, 8);
-        const hour = rawDate.slice(9, 11);
-        const minute = rawDate.slice(11, 13);
+        const hour = rawDate.slice(9, 11) || "00";
+        const minute = rawDate.slice(11, 13) || "00";
 
         const dateObj = new Date(year, month, day, hour, minute);
 
+        // Remove duplicates
         const key = title + dateObj.toISOString();
         if (seen.has(key)) return;
         seen.add(key);
@@ -36,7 +38,7 @@ export default async function handler(req, res) {
       }
     });
 
-    // Weekly filter
+    // Get current week (Sunday → Saturday)
     const now = new Date();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
@@ -45,15 +47,16 @@ export default async function handler(req, res) {
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 7);
 
+    // Filter events for current week
     const weeklyEvents = events.filter(e =>
       e.dateObj >= startOfWeek && e.dateObj < endOfWeek
     );
 
-    // Group
+    // Group by day
     const grouped = {};
 
     weeklyEvents.forEach(e => {
-      const day = e.dateObj.toLocaleDateString("en-US", {
+      const dayLabel = e.dateObj.toLocaleDateString("en-US", {
         weekday: "long",
         month: "short",
         day: "numeric"
@@ -64,16 +67,28 @@ export default async function handler(req, res) {
         minute: "2-digit"
       });
 
-      if (!grouped[day]) grouped[day] = [];
+      if (!grouped[dayLabel]) grouped[dayLabel] = [];
 
-      grouped[day].push({
+      grouped[dayLabel].push({
         time,
         title: e.title,
-        location: e.location
+        location: e.location || null
       });
     });
 
-    res.status(200).json(grouped);
+    // Sort days Sunday → Saturday
+    const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const sorted = {};
+
+    dayOrder.forEach(dayName => {
+      Object.keys(grouped).forEach(fullDay => {
+        if (fullDay.startsWith(dayName)) {
+          sorted[fullDay] = grouped[fullDay];
+        }
+      });
+    });
+
+    res.status(200).json(sorted);
 
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch events" });
