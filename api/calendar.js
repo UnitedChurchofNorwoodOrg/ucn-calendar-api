@@ -13,12 +13,13 @@ export default async function handler(req, res) {
     entries.forEach(entry => {
       const titleMatch = entry.match(/SUMMARY:(.+)/);
       const startMatch = entry.match(/DTSTART[^:]*:(.+)/);
+      const locationMatch = entry.match(/LOCATION:(.+)/);
 
       if (titleMatch && startMatch) {
         const title = titleMatch[1].trim();
         const rawDate = startMatch[1].trim();
+        const location = locationMatch ? locationMatch[1].trim() : "";
 
-        // Parse date
         const year = rawDate.slice(0, 4);
         const month = rawDate.slice(4, 6) - 1;
         const day = rawDate.slice(6, 8);
@@ -27,19 +28,15 @@ export default async function handler(req, res) {
 
         const dateObj = new Date(year, month, day, hour, minute);
 
-        // Remove duplicates
         const key = title + dateObj.toISOString();
         if (seen.has(key)) return;
         seen.add(key);
 
-        events.push({
-          title,
-          dateObj
-        });
+        events.push({ title, dateObj, location });
       }
     });
 
-    // Get current week (Sunday → Saturday)
+    // Weekly filter
     const now = new Date();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
@@ -48,12 +45,11 @@ export default async function handler(req, res) {
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 7);
 
-    // Filter this week
     const weeklyEvents = events.filter(e =>
       e.dateObj >= startOfWeek && e.dateObj < endOfWeek
     );
 
-    // Group by day
+    // Group
     const grouped = {};
 
     weeklyEvents.forEach(e => {
@@ -70,7 +66,11 @@ export default async function handler(req, res) {
 
       if (!grouped[day]) grouped[day] = [];
 
-      grouped[day].push(`${time} – ${e.title}`);
+      grouped[day].push({
+        time,
+        title: e.title,
+        location: e.location
+      });
     });
 
     res.status(200).json(grouped);
