@@ -6,6 +6,7 @@ export default async function handler(req, res) {
     const text = await response.text();
 
     const events = [];
+    const seen = new Set();
 
     const entries = text.split("BEGIN:VEVENT");
 
@@ -14,14 +15,66 @@ export default async function handler(req, res) {
       const startMatch = entry.match(/DTSTART[^:]*:(.+)/);
 
       if (titleMatch && startMatch) {
+        const title = titleMatch[1].trim();
+        const rawDate = startMatch[1].trim();
+
+        // Parse date
+        const year = rawDate.slice(0, 4);
+        const month = rawDate.slice(4, 6) - 1;
+        const day = rawDate.slice(6, 8);
+        const hour = rawDate.slice(9, 11);
+        const minute = rawDate.slice(11, 13);
+
+        const dateObj = new Date(year, month, day, hour, minute);
+
+        // Remove duplicates
+        const key = title + dateObj.toISOString();
+        if (seen.has(key)) return;
+        seen.add(key);
+
         events.push({
-          title: titleMatch[1].trim(),
-          start: startMatch[1].trim()
+          title,
+          dateObj
         });
       }
     });
 
-    res.status(200).json(events);
+    // Get current week (Sunday → Saturday)
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+    // Filter this week
+    const weeklyEvents = events.filter(e =>
+      e.dateObj >= startOfWeek && e.dateObj < endOfWeek
+    );
+
+    // Group by day
+    const grouped = {};
+
+    weeklyEvents.forEach(e => {
+      const day = e.dateObj.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "short",
+        day: "numeric"
+      });
+
+      const time = e.dateObj.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit"
+      });
+
+      if (!grouped[day]) grouped[day] = [];
+
+      grouped[day].push(`${time} – ${e.title}`);
+    });
+
+    res.status(200).json(grouped);
+
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch events" });
   }
