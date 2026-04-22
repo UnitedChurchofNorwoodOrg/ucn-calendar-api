@@ -1,18 +1,24 @@
 export default async function handler(req, res) {
   try {
-    const calendarId = process.env.GOOGLE_CALENDAR_ID;
-    const apiKey = process.env.GOOGLE_API_KEY;
-
-    const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?key=${apiKey}&singleEvents=true&orderBy=startTime`;
+    const url = "https://calendar.google.com/calendar/ical/1b1b5d22d089ff60b2ef371f51fcda2a7bc2aab3c4243e0ea025f27bb71d789f%40group.calendar.google.com/public/basic.ics";
 
     const response = await fetch(url);
-    const data = await response.json();
+    const text = await response.text();
 
-    const events = data.items.map(event => ({
-      title: event.summary,
-      start: event.start.dateTime || event.start.date,
-      end: event.end.dateTime || event.end.date,
-    }));
+    const events = [];
+    const entries = text.split("BEGIN:VEVENT");
+
+    entries.forEach(entry => {
+      const titleMatch = entry.match(/SUMMARY:(.*)/);
+      const startMatch = entry.match(/DTSTART:(.*)/);
+
+      if (titleMatch && startMatch) {
+        events.push({
+          title: titleMatch[1],
+          start: startMatch[1]
+        });
+      }
+    });
 
     res.status(200).json(events);
   } catch (error) {
