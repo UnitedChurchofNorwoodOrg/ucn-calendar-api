@@ -6,16 +6,17 @@ export default async function handler(req, res) {
     const text = await response.text();
 
     const events = [];
+
     const entries = text.split("BEGIN:VEVENT");
 
     entries.forEach(entry => {
-      const titleMatch = entry.match(/SUMMARY:(.*)/);
-      const startMatch = entry.match(/DTSTART:(.*)/);
+      const titleMatch = entry.match(/SUMMARY:(.+)/);
+      const startMatch = entry.match(/DTSTART[^:]*:(.+)/);
 
       if (titleMatch && startMatch) {
         events.push({
-          title: titleMatch[1],
-          start: startMatch[1]
+          title: titleMatch[1].trim(),
+          start: startMatch[1].trim()
         });
       }
     });
